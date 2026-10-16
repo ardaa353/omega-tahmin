@@ -1,5 +1,14 @@
 [
   {
+    "tarih": "17.10.2026 02:22:32",
+    "kullanici": "umit",
+    "ip": "127.0.0.1 (Yerel Yönetim)",
+    "konum": "Masaüstü / Tkinter",
+    "isp": "Yerel Sistem",
+    "cihaz": "Python DARWIN Ana Motoru",
+    "islem": "✅ Yeni Üye Kaydı Oluşturuldu (Tkinter)"
+  },
+  {
     "tarih": "17.10.2026 02:21:45",
     "kullanici": "Yönetici (Admin)",
     "ip": "127.0.0.1 (Yerel Yönetim)",
