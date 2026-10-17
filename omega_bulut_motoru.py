@@ -5499,6 +5499,176 @@ def bulut_uzerinde_otonom_egit_ve_guncelle():
 
     print(f"✅ OMEGA Bulut Python AI tamamlandı: {len(web_maclar)} maç ve 18+13 AI modeli güncellendi!")
 
+# ==================== GERÇEK FİKSTÜR FİLTRESİ (ESKİ VE UYDURMA MAÇLARI ENGELLEYEN YAMA) ====================
+def _gercek_fikstur_motorunu_aktif_et():
+    ESPN_LIG_KODLARI = {
+        'Türkiye Süper Lig': 'tur.1',
+        'İngiltere Premier Lig': 'eng.1',
+        'İngiltere Championship (Alt Lig)': 'eng.2',
+        'İngiltere League 1 (Alt Lig)': 'eng.3',
+        'İspanya La Liga': 'esp.1',
+        'İspanya La Liga 2 (Alt Lig)': 'esp.2',
+        'İtalya Serie A': 'ita.1',
+        'İtalya Serie B (Alt Lig)': 'ita.2',
+        'Almanya Bundesliga': 'ger.1',
+        'Almanya Bundesliga 2 (Alt Lig)': 'ger.2',
+        'Fransa Ligue 1': 'fra.1',
+        'Fransa Ligue 2 (Alt Lig)': 'fra.2',
+        'Hollanda Eredivisie': 'ned.1',
+        'Portekiz Süper Ligi': 'por.1'
+    }
+
+    # Takım isimlerini veri motorundaki profillerle eşleştiren akıllı sözlük
+    TAKIM_ESLEME = {
+        "Galatasaray": "Galatasaray", "Fenerbahce": "Fenerbahçe", "Fenerbahçe": "Fenerbahçe",
+        "Besiktas": "Beşiktaş", "Beşiktaş": "Beşiktaş", "Trabzonspor": "Trabzonspor",
+        "Istanbul Basaksehir": "Başakşehir", " Samsunspor": "Samsunspor",
+        "Manchester City": "Man City", "Manchester United": "Man United",
+        "Nottingham Forest": "Nott'm Forest", "Newcastle United": "Newcastle",
+        "Tottenham Hotspur": "Tottenham", "Wolverhampton Wanderers": "Wolves",
+        "Brighton & Hove Albion": "Brighton", "West Ham United": "West Ham",
+        "Leicester City": "Leicester", "Ipswich Town": "Ipswich",
+        "Sheffield United": "Sheffield United", "Leeds United": "Leeds",
+        "Atlético Madrid": "Ath Madrid", "Athletic Club": "Ath Bilbao",
+        "Real Betis": "Betis", "Real Sociedad": "Sociedad", "Celta Vigo": "Celta",
+        "Internazionale": "Inter", "AC Milan": "Milan", "AS Roma": "Roma",
+        "Hellas Verona": "Verona", "Bayern Munich": "Bayern Munich",
+        "Bayer Leverkusen": "Leverkusen", "Borussia Dortmund": "Dortmund",
+        "Eintracht Frankfurt": "Ein Frankfurt", "Borussia Mönchengladbach": "M'gladbach",
+        "Paris Saint-Germain": "Paris SG", "Olympique Marseille": "Marseille",
+        "Olympique Lyonnais": "Lyon", "AS Monaco": "Monaco", "Sporting CP": "Sp Lisbon"
+    }
+
+    def _takim_bul_veya_ekle( motor, ham_isim, lig_adi):
+        temiz = TAKIM_ESLEME.get(ham_isim.strip(), ham_isim.strip())
+        if temiz in motor.takim_profilleri:
+            return temiz
+        for mevcut_t in motor.takim_profilleri:
+            if temiz.lower() in mevcut_t.lower() or mevcut_t.lower() in temiz.lower():
+                return mevcut_t
+        # Profilde yoksa lig ortalamasında gerçekçi profil aç
+        motor.takim_profilleri[temiz] = {
+            'lig': lig_adi, 'elo': 1560.0, 'xg': 1.45, 'xga': 1.25,
+            'form': 8.0, 'sut': 4.5, 'korner': 5.0
+        }
+        return temiz
+
+    def _gercek_tarih_kontrol_et(tarih_ham, saat_ham):
+        """Tarihi geçmiş (oynanmış) maçları kesinlikle ileri sarmaz, None döndürerek eler."""
+        simdi = datetime.datetime.now()
+        if pd.isna(tarih_ham) or not str(tarih_ham).strip():
+            return None, None, None
+        t_str = str(tarih_ham).strip()
+        s_str = str(saat_ham).strip() if pd.notna(saat_ham) and str(saat_ham).strip() else "19:00"
+        dt_obj = None
+        for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%y %H:%M", "%Y-%m-%d %H:%M"):
+            try:
+                dt_obj = datetime.datetime.strptime(f"{t_str} {s_str}", fmt)
+                break
+            except Exception:
+                continue
+        if dt_obj is None:
+            return None, None, None
+        # Maç oynanıp bittiyse (2 saatten eskiyse) listeden tamamen ele!
+        if dt_obj < simdi - datetime.timedelta(hours=2):
+            return None, None, None
+
+        fark_saat = max(0.0, (dt_obj - simdi).total_seconds() / 3600.0)
+        gun_farki = 1 if fark_saat <= 26.0 else (2 if fark_saat <= 52.0 else min(7, int(fark_saat // 24) + 1))
+        return dt_obj.strftime("%d.%m %H:%M"), gun_farki, int(dt_obj.timestamp())
+
+    def _sadece_gercek_bulten_olustur(self, fikstur_df):
+        self.gelecek_maclar = []
+        ters_lig_sozluk = {v: k for k, v in self.LIGLER.items()}
+        simdi = datetime.datetime.now()
+
+        # 1. ADIM: football-data.co.uk/fixtures.csv içindeki SADECE GELECEK (oynanmamış) gerçek maçları al
+        if not fikstur_df.empty and 'HomeTeam' in fikstur_df.columns:
+            for _, row in fikstur_df.iterrows():
+                ev_ham = str(row.get('HomeTeam', '')).strip()
+                dep_ham = str(row.get('AwayTeam', '')).strip()
+                div = str(row.get('Div', '')).strip()
+                if not ev_ham or not dep_ham:
+                    continue
+                tarih_str, gun_farki, unix_ts = _gercek_tarih_kontrol_et(row.get('Date'), row.get('Time'))
+                if tarih_str is None:
+                    continue  # Eski maçsa atla!
+
+                lig_adi = ters_lig_sozluk.get(div, 'Avrupa Ligi')
+                ev = _takim_bul_veya_ekle(self, ev_ham, lig_adi)
+                dep = _takim_bul_veya_ekle(self, dep_ham, lig_adi)
+                oran1 = float(row['B365H']) if 'B365H' in row and pd.notna(row['B365H']) else None
+                oranx = float(row['B365D']) if 'B365D' in row and pd.notna(row['B365D']) else None
+                oran2 = float(row['B365A']) if 'B365A' in row and pd.notna(row['B365A']) else None
+
+                self.gelecek_maclar.append(self._mac_sozlugu_hazirla(
+                    lig_adi, ev, dep, oran1, oranx, oran2,
+                    tarih_str=tarih_str, gun_farki=gun_farki, unix_zamani=unix_ts
+                ))
+
+        # 2. ADIM: ESPN Canlı Fikstür API'sinden önümüzdeki 7 günün %100 GERÇEK maçlarını çek (Uydurma maç yok!)
+        bas_tarih = simdi.strftime("%Y%m%d")
+        bit_tarih = (simdi + datetime.timedelta(days=7)).strftime("%Y%m%d")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+
+        for lig_adi, espn_kod in ESPN_LIG_KODLARI.items():
+            url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{espn_kod}/scoreboard?dates={bas_tarih}-{bit_tarih}"
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=4, context=self.ssl_context) as resp:
+                    veri = json.loads(resp.read().decode('utf-8', errors='ignore'))
+                    for evn in veri.get("events", []):
+                        durum_tipi = evn.get("status", {}).get("type", {}).get("state", "pre")
+                        if durum_tipi == "post":
+                            continue  # Bitmiş maçı alma!
+
+                        iso_tarih = evn.get("date", "")
+                        try:
+                            utc_dt = datetime.datetime.strptime(iso_tarih[:16], "%Y-%m-%dT%H:%M")
+                            yerel_dt = utc_dt + datetime.timedelta(hours=3)  # TR Saati
+                        except Exception:
+                            continue
+
+                        if yerel_dt < simdi - datetime.timedelta(hours=2):
+                            continue
+
+                        yarismacilar = evn.get("competitions", [{}])[0].get("competitors", [])
+                        if len(yarismacilar) < 2:
+                            continue
+                        ev_isim, dep_isim = "", ""
+                        for y in yarismacilar:
+                            if y.get("homeAway") == "home":
+                                ev_isim = y.get("team", {}).get("displayName", "")
+                            else:
+                                dep_isim = y.get("team", {}).get("displayName", "")
+
+                        if not ev_isim or not dep_isim:
+                            continue
+
+                        ev = _takim_bul_veya_ekle(self, ev_isim, lig_adi)
+                        dep = _takim_bul_veya_ekle(self, dep_isim, lig_adi)
+
+                        if any(m['ev'] == ev and m['dep'] == dep for m in self.gelecek_maclar):
+                            continue
+
+                        fark_saat = max(0.0, (yerel_dt - simdi).total_seconds() / 3600.0)
+                        gun_farki = 1 if fark_saat <= 26.0 else (2 if fark_saat <= 52.0 else min(7, int(fark_saat // 24) + 1))
+
+                        self.gelecek_maclar.append(self._mac_sozlugu_hazirla(
+                            lig_adi, ev, dep,
+                            tarih_str=yerel_dt.strftime("%d.%m %H:%M"),
+                            gun_farki=gun_farki,
+                            unix_zamani=int(yerel_dt.timestamp())
+                        ))
+            except Exception:
+                continue
+
+        self.gelecek_maclar.sort(key=lambda x: x.get('unix_zamani', 0))
+
+    CanliInternetVeriMotoru._bulten_olustur = _sadece_gercek_bulten_olustur
+
+
+_gercek_fikstur_motorunu_aktif_et()
 
 if __name__ == "__main__":
     if "--bulut-calistir" in sys.argv:
