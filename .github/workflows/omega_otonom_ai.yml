@@ -1,0 +1,39 @@
+name: OMEGA Quantum AI 5dk Otonom Python Motoru
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  omega_ai_hesapla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu Cek
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 Kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Yapay Zeka Kutuphanelerini Yukle
+        run: |
+          sudo apt-get update && sudo apt-get install -y python3-tk
+          pip install numpy pandas scipy scikit-learn
+
+      - name: 14 Lig Verisini Cek ve 18+13 Yapay Zekayi Egit (Auto-Web Kontrollu)
+        run: python omega_bulut_motoru.py --bulut-calistir
+
+      - name: Guncel Tahminleri Canli Veriye Kaydet
+        run: |
+          git config --local user.email "omega-ai-bot@users.noreply.github.com"
+          git config --local user.name "OMEGA Quantum Cloud AI"
+          git pull --rebase origin main || true
+          git add omega_canli_veri.json
+          git diff --staged --quiet || git commit -m "🤖 OMEGA Bulut Python AI: 14 Lig + 18 AI Otonom Guncelleme"
+          git push || true
