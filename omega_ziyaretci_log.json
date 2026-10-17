@@ -1,5 +1,14 @@
 [
   {
+    "tarih": "17.10.2026 14:24:35",
+    "kullanici": "enes",
+    "ip": "127.0.0.1 (Yerel Yönetim)",
+    "konum": "Masaüstü / Tkinter",
+    "isp": "Yerel Sistem",
+    "cihaz": "Python DARWIN Ana Motoru",
+    "islem": "✅ Yeni Üye Kaydı Oluşturuldu (Tkinter)"
+  },
+  {
     "tarih": "17.10.2026 14:24:24",
     "kullanici": "enes",
     "ip": "5.24.227.253",
